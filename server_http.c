@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     server_addr.sin_port = htons(PORT) ;
     
     if(bind(server_fd,(struct sockaddr *)&server_addr,sizeof(server_addr)) < 0)
-        perror("error with bind"),close(server_fd),(EXIT_FAILURE);
+        perror("error with bind"),close(server_fd),exit(EXIT_FAILURE);
 
     printf("--------DONE WITH STAGE 2 BIND FUNCTION ------\n");
 
@@ -65,7 +65,6 @@ int main(int argc, char *argv[])
         }
     handle_client(client_fd);        
     }
-    close(server_fd); 
    
     
     return 0;
@@ -76,6 +75,9 @@ void handle_client(int client_fd)
     ssize_t valread = recv(client_fd,buffer,BUFFER_SIZE,0);
     if (valread < 0)
         perror("Error with reading from client"),close(client_fd),exit(EXIT_FAILURE);
+    
+    buffer[valread] = '\0';
+    
     char *file = file_ext(buffer);
     if(file==NULL)
         perror("Invalid file req\n"),close(client_fd),exit(EXIT_FAILURE);    
@@ -89,7 +91,13 @@ void handle_client(int client_fd)
     http_resp(file,extension,response,&response_len);
     if(send(client_fd,response,response_len,0) < 0 )
         perror("Error with sending to the client"); 
-    
+    // ------ If in order to be able to print response, %s expects a null terminated pointer
+    if(response_len < BUFFER_SIZE)//introduced in order to eliminate the posibility of a segfault after calling printf function  
+        response[response_len] ='\0';
+    else 
+        response[BUFFER_SIZE-1] = '\0';
+        
+
     printf("Response sent :%s \n",response); 
     free(file);
     close(client_fd);
@@ -104,13 +112,19 @@ char *file_ext(const char *url)
 
     char *tok = strtok(arg_cpy," ");
     tok = strtok(NULL," ");
-    tok = tok +1 ;
 
     if(!tok)
     {
         free(arg_cpy); 
         return NULL;
     }
+    if(*tok == '\0')
+    {
+        free(arg_cpy);
+        return NULL;
+    }
+    tok = tok +1 ;
+
     char *result  = strdup(tok); //returning directly the token can lead to memory leaks (not checking if token is valid)
     if(result == NULL){
         perror("Strdup() failed ");
